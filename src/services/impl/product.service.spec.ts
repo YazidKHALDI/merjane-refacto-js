@@ -9,6 +9,8 @@ import {ProductService} from './product.service.js';
 import {products, type Product} from '@/db/schema.js';
 import {type Database} from '@/db/type.js';
 
+const ONE_DAY_MS = 1000 * 60 * 60 * 24;
+
 describe('ProductService Tests', () => {
 	let notificationServiceMock: DeepMockProxy<INotificationService>;
 	let productService: ProductService;
@@ -55,6 +57,119 @@ describe('ProductService Tests', () => {
 			where: (product, {eq}) => eq(product.id, product.id),
 		});
 		expect(result).toEqual(product);
+	});
+
+	describe('handleSeasonalProduct', () => {
+		it('marks the product unavailable when the lead time would push past the end of the season', async () => {
+			// GIVEN
+			const product: Product = {
+				id: 2,
+				leadTime: 5,
+				available: 10,
+				type: 'SEASONAL',
+				name: 'Watermelon',
+				expiryDate: null,
+				seasonStartDate: new Date(Date.now() - (10 * ONE_DAY_MS)),
+				seasonEndDate: new Date(Date.now() + (2 * ONE_DAY_MS)),
+			};
+			await databaseMock.insert(products).values(product);
+
+			// WHEN
+			await productService.handleSeasonalProduct(product);
+
+			// THEN
+			expect(product.available).toBe(0);
+			expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(product.name);
+		});
+
+		it('notifies out of stock but leaves stock untouched when the season has not started yet', async () => {
+			// GIVEN
+			const product: Product = {
+				id: 3,
+				leadTime: 5,
+				available: 10,
+				type: 'SEASONAL',
+				name: 'Grapes',
+				expiryDate: null,
+				seasonStartDate: new Date(Date.now() + (10 * ONE_DAY_MS)),
+				seasonEndDate: new Date(Date.now() + (60 * ONE_DAY_MS)),
+			};
+			await databaseMock.insert(products).values(product);
+
+			// WHEN
+			await productService.handleSeasonalProduct(product);
+
+			// THEN — current behavior: notified, but `available` is NOT reset to 0 (see REFACTORING_PLAN.md #2)
+			expect(product.available).toBe(10);
+			expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(product.name);
+		});
+
+		it('falls back to a delay notification when in season but out of stock', async () => {
+			// GIVEN
+			const product: Product = {
+				id: 4,
+				leadTime: 5,
+				available: 0,
+				type: 'SEASONAL',
+				name: 'Strawberry',
+				expiryDate: null,
+				seasonStartDate: new Date(Date.now() - (10 * ONE_DAY_MS)),
+				seasonEndDate: new Date(Date.now() + (60 * ONE_DAY_MS)),
+			};
+			await databaseMock.insert(products).values(product);
+
+			// WHEN
+			await productService.handleSeasonalProduct(product);
+
+			// THEN
+			expect(notificationServiceMock.sendDelayNotification).toHaveBeenCalledWith(product.leadTime, product.name);
+		});
+	});
+
+	describe('handleExpiredProduct', () => {
+		it('decrements stock when the product is in stock and not yet expired', async () => {
+			// GIVEN
+			const product: Product = {
+				id: 5,
+				leadTime: 5,
+				available: 3,
+				type: 'EXPIRABLE',
+				name: 'Butter',
+				expiryDate: new Date(Date.now() + (10 * ONE_DAY_MS)),
+				seasonStartDate: null,
+				seasonEndDate: null,
+			};
+			await databaseMock.insert(products).values(product);
+
+			// WHEN
+			await productService.handleExpiredProduct(product);
+
+			// THEN
+			expect(product.available).toBe(2);
+			expect(notificationServiceMock.sendExpirationNotification).not.toHaveBeenCalled();
+		});
+
+		it('notifies expiration and zeroes stock once the product has expired', async () => {
+			// GIVEN
+			const product: Product = {
+				id: 6,
+				leadTime: 5,
+				available: 3,
+				type: 'EXPIRABLE',
+				name: 'Milk',
+				expiryDate: new Date(Date.now() - (2 * ONE_DAY_MS)),
+				seasonStartDate: null,
+				seasonEndDate: null,
+			};
+			await databaseMock.insert(products).values(product);
+
+			// WHEN
+			await productService.handleExpiredProduct(product);
+
+			// THEN
+			expect(product.available).toBe(0);
+			expect(notificationServiceMock.sendExpirationNotification).toHaveBeenCalledWith(product.name, product.expiryDate);
+		});
 	});
 });
 
