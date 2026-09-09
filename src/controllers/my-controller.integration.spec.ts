@@ -46,8 +46,8 @@ describe('MyController Integration Tests', () => {
 		const {orderId, productIds} = database.transaction(tx => {
 			const productList = tx.insert(products).values(allProducts).returning({productId: products.id}).all();
 			const order = tx.insert(orders).values([{}]).returning({orderId: orders.id}).get();
-			tx.insert(ordersToProducts).values(productList.map(p => ({orderId: order!.orderId, productId: p.productId}))).run();
-			return {orderId: order!.orderId, productIds: productList.map(p => p.productId)};
+			tx.insert(ordersToProducts).values(productList.map(p => ({orderId: order.orderId, productId: p.productId}))).run();
+			return {orderId: order.orderId, productIds: productList.map(p => p.productId)};
 		});
 		const [
 			normalInStockId, normalOutOfStockId, expirableActiveId, expirableExpiredId, seasonalInSeasonId, seasonalNotStartedId,
@@ -61,7 +61,7 @@ describe('MyController Integration Tests', () => {
 		const getProduct = async (id: number) => database.query.products.findFirst({where: eq(products.id, id)});
 
 		// NORMAL, in stock -> decremented, no notification for this product
-		expect((await getProduct(normalInStockId))!.available).toBe(normalInStock.available! - 1);
+		expect((await getProduct(normalInStockId))!.available).toBe(normalInStock.available - 1);
 		expect(notificationServiceMock.sendDelayNotification).not.toHaveBeenCalledWith(normalInStock.leadTime, normalInStock.name);
 
 		// NORMAL, out of stock, leadTime > 0 -> delay notification, stock left untouched
@@ -69,7 +69,7 @@ describe('MyController Integration Tests', () => {
 		expect(notificationServiceMock.sendDelayNotification).toHaveBeenCalledWith(normalOutOfStock.leadTime, normalOutOfStock.name);
 
 		// EXPIRABLE, not expired -> decremented, no notification
-		expect((await getProduct(expirableActiveId))!.available).toBe(expirableActive.available! - 1);
+		expect((await getProduct(expirableActiveId))!.available).toBe(expirableActive.available - 1);
 		expect(notificationServiceMock.sendExpirationNotification).not.toHaveBeenCalledWith(expirableActive.name, expect.anything());
 
 		// EXPIRABLE, expired -> expiration notification, stock zeroed
@@ -77,7 +77,7 @@ describe('MyController Integration Tests', () => {
 		expect(notificationServiceMock.sendExpirationNotification).toHaveBeenCalledWith(expirableExpired.name, expirableExpired.expiryDate);
 
 		// SEASONAL, in season -> decremented, no notification
-		expect((await getProduct(seasonalInSeasonId))!.available).toBe(seasonalInSeason.available! - 1);
+		expect((await getProduct(seasonalInSeasonId))!.available).toBe(seasonalInSeason.available - 1);
 
 		// SEASONAL, season not started yet -> out-of-stock notification, but stock left UNCHANGED
 		// (current behavior — a known inconsistency flagged in REFACTORING_PLAN.md #2, pinned here on purpose)

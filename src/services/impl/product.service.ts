@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/switch-exhaustiveness-check */
 import {type Cradle} from '@fastify/awilix';
 import {eq} from 'drizzle-orm';
 import {type INotificationService} from '../notifications.port.js';
@@ -11,6 +12,48 @@ export class ProductService {
 	public constructor({ns, db}: Pick<Cradle, 'ns' | 'db'>) {
 		this.ns = ns;
 		this.db = db;
+	}
+
+	public async processProduct(p: Product): Promise<void> {
+		switch (p.type) {
+			case 'NORMAL': {
+				if (p.available > 0) {
+					p.available -= 1;
+					await this.db.update(products).set(p).where(eq(products.id, p.id));
+				} else {
+					const {leadTime} = p;
+					if (leadTime > 0) {
+						await this.notifyDelay(leadTime, p);
+					}
+				}
+
+				break;
+			}
+
+			case 'SEASONAL': {
+				const currentDate = new Date();
+				if (currentDate > p.seasonStartDate! && currentDate < p.seasonEndDate! && p.available > 0) {
+					p.available -= 1;
+					await this.db.update(products).set(p).where(eq(products.id, p.id));
+				} else {
+					await this.handleSeasonalProduct(p);
+				}
+
+				break;
+			}
+
+			case 'EXPIRABLE': {
+				const currentDate = new Date();
+				if (p.available > 0 && p.expiryDate! > currentDate) {
+					p.available -= 1;
+					await this.db.update(products).set(p).where(eq(products.id, p.id));
+				} else {
+					await this.handleExpiredProduct(p);
+				}
+
+				break;
+			}
+		}
 	}
 
 	public async notifyDelay(leadTime: number, p: Product): Promise<void> {
