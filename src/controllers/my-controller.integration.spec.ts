@@ -97,6 +97,14 @@ describe('MyController Integration Tests', () => {
 		expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(seasonalNotStarted.name);
 	});
 
+	it('returns 404 when the order does not exist', async () => {
+		const client = supertest(fastify.server);
+
+		const response = await client.post('/orders/999999/processOrder');
+
+		expect(response.status).toBe(404);
+	});
+
 	function createProducts(): [ProductInsert, ProductInsert, ProductInsert, ProductInsert, ProductInsert, ProductInsert] {
 		const d = 24 * 60 * 60 * 1000;
 		return [
