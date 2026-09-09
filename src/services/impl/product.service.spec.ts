@@ -82,7 +82,7 @@ describe('ProductService Tests', () => {
 			expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(product.name);
 		});
 
-		it('notifies out of stock but leaves stock untouched when the season has not started yet', async () => {
+		it('marks the product unavailable when the season has not started yet', async () => {
 			// GIVEN
 			const product: Product = {
 				id: 3,
@@ -99,8 +99,8 @@ describe('ProductService Tests', () => {
 			// WHEN
 			await productService.handleSeasonalProduct(product);
 
-			// THEN — current behavior: notified, but `available` is NOT reset to 0 (see REFACTORING_PLAN.md #2)
-			expect(product.available).toBe(10);
+			// THEN — treated the same as the "delay exceeds season end" case: unavailable
+			expect(product.available).toBe(0);
 			expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(product.name);
 		});
 
@@ -127,28 +127,9 @@ describe('ProductService Tests', () => {
 	});
 
 	describe('handleExpiredProduct', () => {
-		it('decrements stock when the product is in stock and not yet expired', async () => {
-			// GIVEN
-			const product: Product = {
-				id: 5,
-				leadTime: 5,
-				available: 3,
-				type: 'EXPIRABLE',
-				name: 'Butter',
-				expiryDate: new Date(Date.now() + (10 * ONE_DAY_MS)),
-				seasonStartDate: null,
-				seasonEndDate: null,
-			};
-			await databaseMock.insert(products).values(product);
-
-			// WHEN
-			await productService.handleExpiredProduct(product);
-
-			// THEN
-			expect(product.available).toBe(2);
-			expect(notificationServiceMock.sendExpirationNotification).not.toHaveBeenCalled();
-		});
-
+		// `processProduct` only calls this method once the product is already known to be
+		// out of stock or expired, so the method is unconditional: it always notifies
+		// expiration and zeroes stock.
 		it('notifies expiration and zeroes stock once the product has expired', async () => {
 			// GIVEN
 			const product: Product = {

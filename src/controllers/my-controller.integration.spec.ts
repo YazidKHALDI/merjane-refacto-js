@@ -79,9 +79,8 @@ describe('MyController Integration Tests', () => {
 		// SEASONAL, in season -> decremented, no notification
 		expect((await getProduct(seasonalInSeasonId))!.available).toBe(seasonalInSeason.available - 1);
 
-		// SEASONAL, season not started yet -> out-of-stock notification, but stock left UNCHANGED
-		// (current behavior — a known inconsistency flagged in REFACTORING_PLAN.md #2, pinned here on purpose)
-		expect((await getProduct(seasonalNotStartedId))!.available).toBe(seasonalNotStarted.available);
+		// SEASONAL, season not started yet -> out-of-stock notification, stock zeroed
+		expect((await getProduct(seasonalNotStartedId))!.available).toBe(0);
 		expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(seasonalNotStarted.name);
 	});
 
