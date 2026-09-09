@@ -1,16 +1,15 @@
 import {type Cradle} from '@fastify/awilix';
-import {eq} from 'drizzle-orm';
 import {type INotificationService} from '../notifications.port.js';
-import {products, type Product} from '@/db/schema.js';
-import {type Database} from '@/db/type.js';
+import {type Product} from '@/db/schema.js';
+import {type ProductRepository} from '@/repositories/product.repository.js';
 
 export class ProductService {
 	private readonly ns: INotificationService;
-	private readonly db: Database;
+	private readonly productRepository: ProductRepository;
 
-	public constructor({ns, db}: Pick<Cradle, 'ns' | 'db'>) {
+	public constructor({ns, productRepository}: Pick<Cradle, 'ns' | 'productRepository'>) {
 		this.ns = ns;
-		this.db = db;
+		this.productRepository = productRepository;
 	}
 
 	public async processProduct(p: Product): Promise<void> {
@@ -18,7 +17,7 @@ export class ProductService {
 			case 'NORMAL': {
 				if (p.available > 0) {
 					p.available -= 1;
-					await this.db.update(products).set(p).where(eq(products.id, p.id));
+					await this.productRepository.decrementStock(p.id);
 				} else {
 					const {leadTime} = p;
 					if (leadTime > 0) {
@@ -35,7 +34,7 @@ export class ProductService {
 				const seasonEndDate = this.requireDate(p, 'seasonEndDate');
 				if (currentDate > seasonStartDate && currentDate < seasonEndDate && p.available > 0) {
 					p.available -= 1;
-					await this.db.update(products).set(p).where(eq(products.id, p.id));
+					await this.productRepository.decrementStock(p.id);
 				} else {
 					await this.handleSeasonalProduct(p);
 				}
@@ -48,7 +47,7 @@ export class ProductService {
 				const expiryDate = this.requireDate(p, 'expiryDate');
 				if (p.available > 0 && expiryDate > currentDate) {
 					p.available -= 1;
-					await this.db.update(products).set(p).where(eq(products.id, p.id));
+					await this.productRepository.decrementStock(p.id);
 				} else {
 					await this.handleExpiredProduct(p);
 				}
@@ -60,7 +59,7 @@ export class ProductService {
 
 	public async notifyDelay(leadTime: number, p: Product): Promise<void> {
 		p.leadTime = leadTime;
-		await this.db.update(products).set(p).where(eq(products.id, p.id));
+		await this.productRepository.updateLeadTime(p.id, leadTime);
 		this.ns.sendDelayNotification(leadTime, p.name);
 	}
 
@@ -75,7 +74,7 @@ export class ProductService {
 		if (delayExceedsSeasonEnd || seasonNotStartedYet) {
 			this.ns.sendOutOfStockNotification(p.name);
 			p.available = 0;
-			await this.db.update(products).set(p).where(eq(products.id, p.id));
+			await this.productRepository.markUnavailable(p.id);
 		} else {
 			await this.notifyDelay(p.leadTime, p);
 		}
@@ -87,7 +86,7 @@ export class ProductService {
 		const expiryDate = this.requireDate(p, 'expiryDate');
 		this.ns.sendExpirationNotification(p.name, expiryDate);
 		p.available = 0;
-		await this.db.update(products).set(p).where(eq(products.id, p.id));
+		await this.productRepository.markUnavailable(p.id);
 	}
 
 	// Guards against a null date on a product whose type requires one — previously a bare
