@@ -3,12 +3,15 @@ import {
 	text, integer, sqliteTable, primaryKey,
 } from 'drizzle-orm/sqlite-core';
 
+export const PRODUCT_TYPES = ['NORMAL', 'SEASONAL', 'EXPIRABLE'] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
 // Declaring enum in database
 export const products = sqliteTable('products', {
 	id: integer('id').notNull().primaryKey(),
 	leadTime: integer('lead_time').notNull(),
 	available: integer('available').notNull(),
-	type: text('type').notNull(),
+	type: text('type', {enum: PRODUCT_TYPES}).notNull(),
 	name: text('name').notNull(),
 	expiryDate: integer('expiry_date', {mode: 'timestamp_ms'}),
 	seasonStartDate: integer('season_start_date', {mode: 'timestamp_ms'}),

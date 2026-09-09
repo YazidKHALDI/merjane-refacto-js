@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/switch-exhaustiveness-check */
 import {type Cradle} from '@fastify/awilix';
 import {eq} from 'drizzle-orm';
 import {type INotificationService} from '../notifications.port.js';
@@ -32,7 +31,9 @@ export class ProductService {
 
 			case 'SEASONAL': {
 				const currentDate = new Date();
-				if (currentDate > p.seasonStartDate! && currentDate < p.seasonEndDate! && p.available > 0) {
+				const seasonStartDate = this.requireDate(p, 'seasonStartDate');
+				const seasonEndDate = this.requireDate(p, 'seasonEndDate');
+				if (currentDate > seasonStartDate && currentDate < seasonEndDate && p.available > 0) {
 					p.available -= 1;
 					await this.db.update(products).set(p).where(eq(products.id, p.id));
 				} else {
@@ -44,7 +45,8 @@ export class ProductService {
 
 			case 'EXPIRABLE': {
 				const currentDate = new Date();
-				if (p.available > 0 && p.expiryDate! > currentDate) {
+				const expiryDate = this.requireDate(p, 'expiryDate');
+				if (p.available > 0 && expiryDate > currentDate) {
 					p.available -= 1;
 					await this.db.update(products).set(p).where(eq(products.id, p.id));
 				} else {
@@ -64,9 +66,11 @@ export class ProductService {
 
 	public async handleSeasonalProduct(p: Product): Promise<void> {
 		const currentDate = new Date();
+		const seasonStartDate = this.requireDate(p, 'seasonStartDate');
+		const seasonEndDate = this.requireDate(p, 'seasonEndDate');
 		const d = 1000 * 60 * 60 * 24;
-		const delayExceedsSeasonEnd = new Date(currentDate.getTime() + (p.leadTime * d)) > p.seasonEndDate!;
-		const seasonNotStartedYet = p.seasonStartDate! > currentDate;
+		const delayExceedsSeasonEnd = new Date(currentDate.getTime() + (p.leadTime * d)) > seasonEndDate;
+		const seasonNotStartedYet = seasonStartDate > currentDate;
 
 		if (delayExceedsSeasonEnd || seasonNotStartedYet) {
 			this.ns.sendOutOfStockNotification(p.name);
@@ -80,8 +84,20 @@ export class ProductService {
 	public async handleExpiredProduct(p: Product): Promise<void> {
 		// Only reached from `processProduct` once the product is already known to be
 		// out of stock or expired, so no further stock/expiry check is needed here.
-		this.ns.sendExpirationNotification(p.name, p.expiryDate!);
+		const expiryDate = this.requireDate(p, 'expiryDate');
+		this.ns.sendExpirationNotification(p.name, expiryDate);
 		p.available = 0;
 		await this.db.update(products).set(p).where(eq(products.id, p.id));
+	}
+
+	// Guards against a null date on a product whose type requires one — previously a bare
+	// `!` assertion here would let a null slip through and silently corrupt the date math.
+	private requireDate(p: Product, field: 'expiryDate' | 'seasonStartDate' | 'seasonEndDate'): Date {
+		const value = p[field];
+		if (value === null) {
+			throw new Error(`Product ${p.id} (${p.name}, ${p.type}) is missing required field "${field}"`);
+		}
+
+		return value;
 	}
 }

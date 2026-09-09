@@ -43,15 +43,28 @@ describe('MyController Integration Tests', () => {
 			normalInStock, normalOutOfStock, expirableActive, expirableExpired, seasonalInSeason, seasonalNotStarted,
 		] = allProducts;
 
-		const {orderId, productIds} = database.transaction(tx => {
-			const productList = tx.insert(products).values(allProducts).returning({productId: products.id}).all();
+		const {orderId, productIdByName} = database.transaction(tx => {
+			const productList = tx.insert(products).values(allProducts).returning({productId: products.id, name: products.name}).all();
 			const order = tx.insert(orders).values([{}]).returning({orderId: orders.id}).get();
 			tx.insert(ordersToProducts).values(productList.map(p => ({orderId: order.orderId, productId: p.productId}))).run();
-			return {orderId: order.orderId, productIds: productList.map(p => p.productId)};
+			return {orderId: order.orderId, productIdByName: new Map(productList.map(p => [p.name, p.productId]))};
 		});
-		const [
-			normalInStockId, normalOutOfStockId, expirableActiveId, expirableExpiredId, seasonalInSeasonId, seasonalNotStartedId,
-		] = productIds;
+
+		const getProductId = (name: string): number => {
+			const id = productIdByName.get(name);
+			if (id === undefined) {
+				throw new Error(`No product id found for "${name}"`);
+			}
+
+			return id;
+		};
+
+		const normalInStockId = getProductId(normalInStock.name);
+		const normalOutOfStockId = getProductId(normalOutOfStock.name);
+		const expirableActiveId = getProductId(expirableActive.name);
+		const expirableExpiredId = getProductId(expirableExpired.name);
+		const seasonalInSeasonId = getProductId(seasonalInSeason.name);
+		const seasonalNotStartedId = getProductId(seasonalNotStarted.name);
 
 		await client.post(`/orders/${orderId}/processOrder`).expect(200).expect('Content-Type', /application\/json/);
 
@@ -84,7 +97,7 @@ describe('MyController Integration Tests', () => {
 		expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith(seasonalNotStarted.name);
 	});
 
-	function createProducts(): ProductInsert[] {
+	function createProducts(): [ProductInsert, ProductInsert, ProductInsert, ProductInsert, ProductInsert, ProductInsert] {
 		const d = 24 * 60 * 60 * 1000;
 		return [
 			{
