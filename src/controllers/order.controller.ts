@@ -2,7 +2,7 @@ import fastifyPlugin from 'fastify-plugin';
 import {serializerCompiler, validatorCompiler, type ZodTypeProvider} from 'fastify-type-provider-zod';
 import {z} from 'zod';
 
-export const myController = fastifyPlugin(async server => {
+export const orderController = fastifyPlugin(async server => {
 	// Add schema validator and serializer
 	server.setValidatorCompiler(validatorCompiler);
 	server.setSerializerCompiler(serializerCompiler);
@@ -12,6 +12,11 @@ export const myController = fastifyPlugin(async server => {
 			params: z.object({
 				orderId: z.coerce.number(),
 			}),
+			response: {
+				200: z.object({
+					orderId: z.number(),
+				}),
+			},
 		},
 	}, async (request, reply) => {
 		const orderService = server.diContainer.resolve('orderService');

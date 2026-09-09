@@ -4,11 +4,11 @@ import {type Product} from '@/db/schema.js';
 import {type ProductRepository} from '@/repositories/product.repository.js';
 
 export class ProductService {
-	private readonly ns: INotificationService;
+	private readonly notificationService: INotificationService;
 	private readonly productRepository: ProductRepository;
 
-	public constructor({ns, productRepository}: Pick<Cradle, 'ns' | 'productRepository'>) {
-		this.ns = ns;
+	public constructor({notificationService, productRepository}: Pick<Cradle, 'notificationService' | 'productRepository'>) {
+		this.notificationService = notificationService;
 		this.productRepository = productRepository;
 	}
 
@@ -60,7 +60,7 @@ export class ProductService {
 	public async notifyDelay(leadTime: number, p: Product): Promise<void> {
 		p.leadTime = leadTime;
 		await this.productRepository.updateLeadTime(p.id, leadTime);
-		this.ns.sendDelayNotification(leadTime, p.name);
+		this.notificationService.sendDelayNotification(leadTime, p.name);
 	}
 
 	public async handleSeasonalProduct(p: Product): Promise<void> {
@@ -72,7 +72,7 @@ export class ProductService {
 		const seasonNotStartedYet = seasonStartDate > currentDate;
 
 		if (delayExceedsSeasonEnd || seasonNotStartedYet) {
-			this.ns.sendOutOfStockNotification(p.name);
+			this.notificationService.sendOutOfStockNotification(p.name);
 			p.available = 0;
 			await this.productRepository.markUnavailable(p.id);
 		} else {
@@ -84,7 +84,7 @@ export class ProductService {
 		// Only reached from `processProduct` once the product is already known to be
 		// out of stock or expired, so no further stock/expiry check is needed here.
 		const expiryDate = this.requireDate(p, 'expiryDate');
-		this.ns.sendExpirationNotification(p.name, expiryDate);
+		this.notificationService.sendExpirationNotification(p.name, expiryDate);
 		p.available = 0;
 		await this.productRepository.markUnavailable(p.id);
 	}

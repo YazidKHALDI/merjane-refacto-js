@@ -23,7 +23,7 @@ describe('ProductService Tests', () => {
 		({databaseMock, databaseName, close: closeDatabase} = await createDatabaseMock());
 		notificationServiceMock = mockDeep<INotificationService>();
 		productService = new ProductService({
-			ns: notificationServiceMock,
+			notificationService: notificationServiceMock,
 			productRepository: new ProductRepository({db: databaseMock}),
 		});
 	});

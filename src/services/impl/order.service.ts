@@ -10,11 +10,11 @@ export const orderNotFoundError = createError('ORDER_NOT_FOUND', 'Order %s not f
 
 export class OrderService {
 	private readonly db: Database;
-	private readonly ps: ProductService;
+	private readonly productService: ProductService;
 
-	public constructor({db, ps}: Pick<Cradle, 'db' | 'ps'>) {
+	public constructor({db, productService}: Pick<Cradle, 'db' | 'productService'>) {
 		this.db = db;
-		this.ps = ps;
+		this.productService = productService;
 	}
 
 	public async processOrder(orderId: number): Promise<Order> {
@@ -39,7 +39,7 @@ export class OrderService {
 
 		if (productList) {
 			for (const {product: p} of productList) {
-				await this.ps.processProduct(p);
+				await this.productService.processProduct(p);
 			}
 		}
 

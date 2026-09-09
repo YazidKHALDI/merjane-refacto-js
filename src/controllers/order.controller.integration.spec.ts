@@ -17,7 +17,7 @@ import {
 import {type Database} from '@/db/type.js';
 import {buildFastify} from '@/fastify.js';
 
-describe('MyController Integration Tests', () => {
+describe('OrderController Integration Tests', () => {
 	let fastify: FastifyInstance;
 	let database: Database;
 	let notificationServiceMock: DeepMockProxy<INotificationService>;
@@ -27,7 +27,7 @@ describe('MyController Integration Tests', () => {
 
 		fastify = await buildFastify();
 		fastify.diContainer.register({
-			ns: asValue(notificationServiceMock as INotificationService),
+			notificationService: asValue(notificationServiceMock as INotificationService),
 		});
 		await fastify.ready();
 		database = fastify.database;
